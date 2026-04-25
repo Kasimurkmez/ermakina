@@ -1,0 +1,40 @@
+{
+  "name": "er-makina-fikstur",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Er Makina Fikstür Takip Sistemi",
+  "author": "Er Makina",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@google/genai": "*",
+    "@yudiel/react-qr-scanner": "^2.5.1",
+    "exceljs": "^4.4.0",
+    "file-saver": "^2.0.5",
+    "firebase": "^10.8.0",
+    "firebase-admin": "^13.6.1",
+    "qrcode.react": "^4.2.0",
+    "react": "^18.2.0",
+    "react-barcode": "^1.6.1",
+    "react-dom": "^18.2.0",
+    "react-hot-toast": "^2.4.1",
+    "vite-plugin-pwa": "^1.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "@types/react": "^18.2.55",
+    "@types/react-dom": "^18.2.19",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.17",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.1.0"
+  }
+}
