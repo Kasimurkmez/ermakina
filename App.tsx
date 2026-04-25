@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
+import ExcelJS from "exceljs";
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from "./components/firebase";
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, writeBatch } from "firebase/firestore";
+import { Scanner } from "@yudiel/react-qr-scanner";
 import toast, { Toaster } from "react-hot-toast";
 import logoResmi from "./assets/ermlogo.png";
 
@@ -14,25 +14,38 @@ import DataTable from "./components/DataTable";
 import Pagination from "./components/Pagination";
 import AddDataModal from "./components/AddDataModal";
 import OperatorSelectionModal from "./components/OperatorSelectionModal";
-import DeliveryFormModal from "./components/DeliveryFormModal";
 import LabelPrintingModal from "./components/LabelPrintingModal";
 import Login from "./components/Login";
-import AdvancedFilters from "./components/AdvancedFilters";
 import ImageModal from "./components/ImageModal";
 import HistoryModal from "./components/HistoryModal";
-import CancellationModal from "./components/CancellationModal";
-import RepairModal from "./components/RepairModal";
 import AuditModal from "./components/AuditModal";
-import DashboardStats, { DashboardFilterType } from "./components/DashboardStats";
+import DashboardStats, {
+  DashboardFilterType,
+} from "./components/DashboardStats";
+
+const appEnv = import.meta.env.VITE_APP_ENV || "prod";
 
 const CameraIcon = ({ className = "w-5 h-5" }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+  <svg
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+    />
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+    />
   </svg>
 );
-
-type Operator = { no: string; name: string };
 
 const HEADERS = [
   "resim",
@@ -52,67 +65,48 @@ const HEADERS = [
   "durum",
 ];
 
-const FILTER_COLUMNS = [
-  { key: "müşteri", label: "Müşteri" },
-  { key: "proje", label: "Proje" },
-  { key: "parça no", label: "Parça No" },
-  { key: "parça adı", label: "Parça Adı" },
-  { key: "operasyon adı", label: "Operasyon" },
-  { key: "operatör", label: "Operatör" },
+const EnvBadge = () => {
+  const isTest = appEnv === "test";
 
-  // ÖNEMLİ:
-  // Filtre boş sonuç verirse burayı geçici olarak "raf" yap.
-  // Asıl kalıcı çözüm için useFixtureData veya AdvancedFilters dosyasını da güncellemek gerekir.
-  { key: "adres", label: "Tam Adres" },
-
-  { key: "tarih", label: "İşlem Tarihi" },
-];
-
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
-
-const OPERATORS_LIST: Operator[] = [
-  { no: "OPR01", name: "FATİH ERDOĞAN" },
-  { no: "OPR02", name: "ALPER ŞAFAK KARAGÖZ" },
-  { no: "OPR03", name: "UFUK KARAGÖZ" },
-  { no: "OPR04", name: "MAHMUT ÜÇER" },
-  { no: "OPR05", name: "ÖMER YETİŞKEN" },
-  { no: "OPR06", name: "SEZAİ ÇELEN" },
-  { no: "OPR07", name: "FURKAN BİÇİCİ" },
-  { no: "OPR08", name: "EMRE ÇETİN" },
-  { no: "OPR09", name: "OSMAN KUŞTUR" },
-  { no: "OPR10", name: "ALPAY IŞIKLI" },
-  { no: "OPR11", name: "ADEM SARIKAYA" },
-  { no: "OPR12", name: "ÖMER ÇOBAN" },
-  { no: "OPR13", name: "HALİT EKİCİ" },
-  { no: "OPR14", name: "ERCAN KARAHÖYÜKLÜ" },
-  { no: "OPR15", name: "EMRE ÖZMEN" },
-  { no: "OPR16", name: "ONUR KEMİKÇİOĞLU" },
-  { no: "OPR18", name: "MEHMET DURAN" },
-  { no: "OPR19", name: "İSA ERGEN" },
-  { no: "OPR20", name: "DOĞAN ÇELİK" },
-  { no: "OPR21", name: "GÖRKEM BİÇİCİ" },
-  { no: "OPR22", name: "SÜLEYMAN E.OSMANOĞLU" },
-  { no: "OPR23", name: "BURAK KILINÇ" },
-  { no: "OPR24", name: "BARIŞ BAKKAL" },
-  { no: "OPR25", name: "KÜRŞAT SARITAŞ" },
-  { no: "OPR26", name: "ÖMER ÖZKAN" },
-  { no: "OPR27", name: "DERVİŞ ÇETİN" },
-  { no: "OPR30", name: "HÜSEYİN SÖNMEZ" },
-  { no: "OPR31", name: "YUSUF ÖZKAN" },
-  { no: "OPR32", name: "SAMET EMİROSMANOĞLU" },
-  { no: "DURUM", name: "ARIZALI" },
-  { no: "DURUM", name: "boşta" },
-];
+  return (
+    <div
+      className={`fixed top-3 right-3 z-[9999] px-4 py-2 rounded-lg font-black text-xs shadow-lg border ${
+        isTest
+          ? "bg-yellow-500 text-black border-yellow-300"
+          : "bg-green-600 text-white border-green-400"
+      }`}
+    >
+      {isTest ? "TEST ORTAMI" : "CANLI ORTAM"}
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [userRole, setUserRole] = useState<"admin" | "guest" | null>(null);
-  const [dashboardFilter, setDashboardFilter] = useState<DashboardFilterType>("ALL");
+  const [dashboardFilter, setDashboardFilter] =
+    useState<DashboardFilterType>("ALL");
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingRow, setEditingRow] = useState<any | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
+  const [selectedLabelSerial, setSelectedLabelSerial] = useState<string | null>(
+    null
+  );
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [selectedRowForHistory, setSelectedRowForHistory] =
+    useState<FixtureData | null>(null);
+  const [isOperatorModalOpen, setIsOperatorModalOpen] = useState(false);
+  const [selectedRowForOperator, setSelectedRowForOperator] =
+    useState<FixtureData | null>(null);
 
-  const isGuest = userRole !== "admin";
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const {
     data,
@@ -120,567 +114,290 @@ const App: React.FC = () => {
     isOperationLoading,
     searchQuery,
     setSearchQuery,
-    activeFilters,
-    setActiveFilters,
     sortConfig,
     setSortConfig,
     saveData,
     deleteData,
   } = useFixtureData(user, userRole);
 
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [itemsPerPage, setItemsPerPage] = useState<number>(20);
+  const isGuest = userRole !== "admin";
 
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [editingRow, setEditingRow] = useState<any | null>(null);
+  const cleanText = useCallback(
+    (v: any) =>
+      String(v || "")
+        .toLocaleUpperCase("tr-TR")
+        .trim(),
+    []
+  );
 
-  const [isOperatorModalOpen, setIsOperatorModalOpen] = useState(false);
-  const [selectedRowForOperator, setSelectedRowForOperator] = useState<FixtureData | null>(null);
-
-  const [isDeliveryFormModalOpen, setIsDeliveryFormModalOpen] = useState(false);
-  const [selectedRowForDeliveryForm, setSelectedRowForDeliveryForm] = useState<FixtureData | null>(null);
-
-  const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
-  const [selectedLabelSerial, setSelectedLabelSerial] = useState<string | null>(null);
-
-  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [selectedRowForHistory, setSelectedRowForHistory] = useState<FixtureData | null>(null);
-
-  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
-  const [selectedRowForCancel, setSelectedRowForCancel] = useState<FixtureData | null>(null);
-
-  const [isRepairModalOpen, setIsRepairModalOpen] = useState(false);
-  const [selectedRowForRepair, setSelectedRowForRepair] = useState<FixtureData | null>(null);
-
-  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
-  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const cleanText = useCallback((value: unknown): string => {
-    return String(value || "")
-      .toLocaleUpperCase("tr-TR")
-      .replace(/\s+/g, " ")
-      .replace(/KUTU\s*(\d+)/gi, "KUTU $1")
-      .trim();
-  }, []);
-
-  const splitAddressParts = useCallback((value: unknown): string[] => {
-    return String(value || "")
-      .split("/")
-      .map((part) => cleanText(part))
-      .filter((part) => part && part !== "-");
-  }, [cleanText]);
-
-  const buildFullAddress = useCallback((item: any): string => {
-    const rawParts = [
-      ...splitAddressParts(item?.raf),
-      ...splitAddressParts(item?.palet),
-      ...splitAddressParts(item?.kutu),
-    ];
-  
-    const uniqueParts: string[] = [];
-  
-    rawParts.forEach((part) => {
-      if (!part) return;
-      if (uniqueParts.includes(part)) return;
-      uniqueParts.push(part);
-    });
-  
-    if (uniqueParts.length === 0 && item?.adres) {
-      return splitAddressParts(item.adres).join(" / ");
-    }
-  
-    return uniqueParts.join(" / ");
-  }, [splitAddressParts]);
-  const enrichWithAddress = useCallback((items: FixtureData[]) => {
-    return (items || []).map((item: any) => ({
-      ...item,
-
-      // Eski bozuk adresi kullanmıyoruz.
-      // Her zaman raf/konum/palet/kutu alanlarından temiz yeniden üretiyoruz.
-      adres: buildFullAddress(item),
-    }));
-  }, [buildFullAddress]);
-
-  const handleLogout = useCallback(async (autoLogout = false) => {
-    sessionStorage.removeItem("userRole");
-    setUserRole(null);
-    await signOut(auth);
-
-    if (autoLogout) {
-      toast("Güvenlik nedeniyle oturumunuz kapatıldı.", { icon: "🔒" });
-    } else {
-      toast.success("Başarıyla çıkış yapıldı.");
-    }
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-
-    if (params.has("serial")) {
-      sessionStorage.setItem("userRole", "guest");
-      setUserRole("guest");
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-
-      const storedRole = sessionStorage.getItem("userRole") as "admin" | "guest" | null;
-
-      if (params.has("serial")) {
-        setUserRole("guest");
-      } else if (currentUser && storedRole) {
-        setUserRole(storedRole);
-      } else if (storedRole === "guest") {
-        setUserRole("guest");
-      } else {
-        setUserRole(null);
+  const buildFullAddress = useCallback(
+    (item: any) => {
+      if (item?.adres && String(item.adres).trim() !== "") {
+        return cleanText(item.adres);
       }
 
+      return [item?.raf, item?.palet, item?.kutu]
+        .filter(Boolean)
+        .map(cleanText)
+        .join(" / ");
+    },
+    [cleanText]
+  );
+
+  const normalizedData = useMemo(
+    () =>
+      (data || []).map((item: any) => ({
+        ...item,
+        adres: buildFullAddress(item) || item.adres,
+      })),
+    [data, buildFullAddress]
+  );
+
+  const normalizedRawData = useMemo(
+    () =>
+      (rawData || []).map((item: any) => ({
+        ...item,
+        adres: buildFullAddress(item) || item.adres,
+      })),
+    [rawData, buildFullAddress]
+  );
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const toastId = toast.loading("Excel'deki tüm sayfalar taranıyor...");
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const buffer = await file.arrayBuffer();
+
+      await workbook.xlsx.load(buffer);
+
+      const batch = writeBatch(db);
+      let count = 0;
+
+      const getCellValue = (cell: any): string => {
+        const value = cell?.value;
+
+        if (!value) return "";
+        if (typeof value === "string" || typeof value === "number")
+          return String(value).trim();
+        if (value.text) return String(value.text).trim();
+        if (value.richText)
+          return value.richText
+            .map((t: any) => t.text)
+            .join("")
+            .trim();
+        if (value.result) return String(value.result).trim();
+
+        return "";
+      };
+
+      workbook.eachSheet((worksheet) => {
+        worksheet.eachRow((row, rowNumber) => {
+          if (rowNumber < 6) return;
+
+          const seriNo = getCellValue(row.getCell(1));
+
+          if (seriNo && !seriNo.toUpperCase().includes("LİSTESİ")) {
+            const docId = seriNo.replace(/\s+/g, "-").toUpperCase();
+            const docRef = doc(db, "fixtures", docId);
+
+            batch.set(
+              docRef,
+              {
+                "seri no": seriNo.toUpperCase(),
+                "parça no": getCellValue(row.getCell(2)),
+                "parça adı": getCellValue(row.getCell(3)),
+                müşteri: getCellValue(row.getCell(4)),
+                proje: getCellValue(row.getCell(6)),
+                "operasyon adı": getCellValue(row.getCell(7)),
+                "fikstür tanımı": getCellValue(row.getCell(8)),
+                adres: getCellValue(row.getCell(9)),
+                durum: "KULLANILABİLİR",
+                operatör: "BOŞTA",
+                tarih: new Date().toLocaleString("tr-TR"),
+                resim: "",
+                gecmis: [],
+              },
+              { merge: true }
+            );
+
+            count++;
+          }
+        });
+      });
+
+      if (count > 0) {
+        await batch.commit();
+
+        toast.success(`${count} adet kayıt başarıyla yüklendi!`, {
+          id: toastId,
+        });
+
+        setTimeout(() => window.location.reload(), 1200);
+      } else {
+        toast.error(
+          "Excel'de uygun veri bulunamadı! A sütununu kontrol edin.",
+          {
+            id: toastId,
+          }
+        );
+      }
+    } catch (error: any) {
+      console.error(error);
+
+      toast.error("Excel okunamadı! Dosya formatı desteklenmiyor olabilir.", {
+        id: toastId,
+      });
+    }
+  };
+
+  const handleBulkUpdate = async (
+    items: FixtureData[],
+    location: { raf: string; palet: string; kutu: string }
+  ) => {
+    if (!items || items.length === 0) {
+      toast.error("Seçili parça yok.");
+      return;
+    }
+
+    const toastId = toast.loading("Adresler güncelleniyor...");
+
+    try {
+      const batch = writeBatch(db);
+
+      const raf = cleanText(location.raf);
+      const palet = cleanText(location.palet);
+      const kutu = cleanText(location.kutu || "KUTU 1");
+
+      const adres = [raf, palet, kutu]
+        .filter((x) => x && x !== "-")
+        .join(" / ");
+
+      items.forEach((item) => {
+        const itemId = String(item.id || item["seri no"]);
+        const docRef = doc(db, "fixtures", itemId);
+
+        batch.set(
+          docRef,
+          {
+            raf,
+            konum: "",
+            palet,
+            kutu,
+            adres,
+            durum: "KULLANILABİLİR",
+            operatör: "BOŞTA",
+            tarih: new Date().toLocaleString("tr-TR"),
+          },
+          { merge: true }
+        );
+      });
+
+      await batch.commit();
+
+      toast.success(`${items.length} parça yeni adrese aktarıldı.`, {
+        id: toastId,
+      });
+
+      setTimeout(() => window.location.reload(), 800);
+    } catch (e: any) {
+      console.error("Toplu adres güncelleme hatası:", e);
+      toast.error("Adres güncellenemedi: " + e.message, { id: toastId });
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      setUserRole(sessionStorage.getItem("userRole") as any);
       setAuthLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (userRole !== "admin") return;
-
-    let timeoutId: any;
-
-    const resetTimer = () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => handleLogout(true), INACTIVITY_TIMEOUT);
-    };
-
-    const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart"];
-
-    resetTimer();
-    events.forEach((event) => window.addEventListener(event, resetTimer));
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      events.forEach((event) => window.removeEventListener(event, resetTimer));
-    };
-  }, [userRole, handleLogout]);
-
-  const normalizedRawData = useMemo(() => {
-    return enrichWithAddress(rawData || []);
-  }, [rawData, enrichWithAddress]);
-
-  const normalizedData = useMemo(() => {
-    return enrichWithAddress(data || []);
-  }, [data, enrichWithAddress]);
-
-  const handleOpenAddModal = () => {
-    setEditingRow(null);
-    setIsAddModalOpen(true);
-  };
-
-  const handleOpenEditModal = (row: any) => {
-    setEditingRow(row);
-    setIsAddModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsAddModalOpen(false);
-    setEditingRow(null);
-  };
-
-  const handleOpenOperatorModal = (row: any) => {
-    setSelectedRowForOperator(row);
-    setIsOperatorModalOpen(true);
-  };
-
-  const handleCloseOperatorModal = () => {
-    setIsOperatorModalOpen(false);
-    setSelectedRowForOperator(null);
-  };
-
-  const handleOpenDeliveryForm = (row: any) => {
-    setSelectedRowForDeliveryForm(row);
-    setIsDeliveryFormModalOpen(true);
-  };
-
-  const handleCloseDeliveryForm = () => {
-    setIsDeliveryFormModalOpen(false);
-    setSelectedRowForDeliveryForm(null);
-  };
-
-  const handleOpenLabelModal = (serialNo?: string) => {
-    setSelectedLabelSerial(serialNo || null);
-    setIsLabelModalOpen(true);
-  };
-
-  const handleViewImage = (url: string) => {
-    setSelectedImageUrl(url);
-  };
-
-  const handleOpenHistoryModal = (row: any) => {
-    setSelectedRowForHistory(row);
-    setIsHistoryModalOpen(true);
-  };
-
-  const handleCloseHistoryModal = () => {
-    setIsHistoryModalOpen(false);
-    setSelectedRowForHistory(null);
-  };
-
-  const handleOpenCancelModal = (row: any) => {
-    setSelectedRowForCancel(row);
-    setIsCancelModalOpen(true);
-  };
-
-  const handleCloseCancelModal = () => {
-    setIsCancelModalOpen(false);
-    setSelectedRowForCancel(null);
-  };
-
-  const handleOpenRepairModal = (row: any) => {
-    setSelectedRowForRepair(row);
-    setIsRepairModalOpen(true);
-  };
-
-  const handleCloseRepairModal = () => {
-    setIsRepairModalOpen(false);
-    setSelectedRowForRepair(null);
-  };
-
-  const onSaveHandler = async (
-    rowData: any,
-    imageFile?: File | null,
-    removeImage?: boolean
-  ) => {
-    const toastId = toast.loading("İşlem yapılıyor...");
-  
-    try {
-      const generatedAddress = buildFullAddress(rowData);
-  
-      const enrichedRow = {
-        ...rowData,
-  
-        // Elle adres yazıldıysa onu korur.
-        // Raf/konum/palet/kutu varsa tam adresi üretir.
-        adres: generatedAddress || cleanText(rowData?.adres),
-      };
-  
-      await saveData(enrichedRow, imageFile, removeImage);
-  
-      handleCloseModal();
-      toast.success("Başarılı", { id: toastId });
-    } catch (e: any) {
-      toast.error(`Hata: ${e.message}`, { id: toastId });
-    }
-  };
-  const onDeleteHandler = async (id: string) => {
-    if (!window.confirm("Silmek istediğinize emin misiniz?")) return;
-  
-    const toastId = toast.loading("Siliniyor...");
-  
-    try {
-      await deleteData(id);
-      toast.success("Silindi.", { id: toastId });
-    } catch (e: any) {
-      toast.error(`Hata: ${e.message}`, { id: toastId });
-    }
-  };
-
-  const onOperatorAssignHandler = async (operatorName: string) => {
-    if (!selectedRowForOperator) return;
-
-    const isUnassigning = operatorName === "";
-    const toastId = toast.loading(isUnassigning ? "Boşa alınıyor..." : "Atanıyor...");
-    const simdi = new Date().toLocaleString("tr-TR");
-
-    try {
-      const currentHistory = selectedRowForOperator["gecmis"] || [];
-
-      let newLife = Number(
-        selectedRowForOperator["current_life"] ??
-        selectedRowForOperator["total_life"] ??
-        1000
-      );
-
-      if (!isUnassigning) {
-        newLife = Math.max(0, newLife - 1);
-      }
-
-      const updatedData = {
-        ...selectedRowForOperator,
-        adres: buildFullAddress(selectedRowForOperator),
-        operatör: isUnassigning ? "BOŞTA" : operatorName,
-        tarih: isUnassigning ? "" : simdi,
-        gecmis: [
-          ...currentHistory,
-          {
-            islem: isUnassigning ? "GERİ ALINDI" : "VERİLDİ",
-            operator: operatorName || "BOŞTA",
-            tarih: simdi,
-          },
-        ],
-        current_life: newLife,
-      };
-
-      await saveData(updatedData);
-      handleCloseOperatorModal();
-      toast.success("Güncellendi", { id: toastId });
-    } catch (e: any) {
-      toast.error(e.message, { id: toastId });
-    }
-  };
-
-  const onCancelConfirmHandler = async (type: string, reason: string) => {
-    if (!selectedRowForCancel) return;
-
-    const toastId = toast.loading(`${type} işlemi yapılıyor...`);
-    const simdi = new Date().toLocaleString("tr-TR");
-
-    try {
-      const updatedData = {
-        ...selectedRowForCancel,
-        adres: buildFullAddress(selectedRowForCancel),
-        operatör: type,
-        durum: type,
-        tarih: simdi,
-        gecmis: [
-          ...(selectedRowForCancel["gecmis"] || []),
-          {
-            islem: type,
-            operator: "YÖNETİCİ",
-            tarih: simdi,
-            aciklama: reason,
-          },
-        ],
-      };
-
-      await saveData(updatedData);
-      handleCloseCancelModal();
-      toast.success(`Durum güncellendi: ${type}`, { id: toastId });
-    } catch (e: any) {
-      toast.error(e.message, { id: toastId });
-    }
-  };
-
-  const onRepairConfirmHandler = async (note: string) => {
-    if (!selectedRowForRepair) return;
-
-    const toastId = toast.loading("Veriler onarılıyor...");
-    const simdi = new Date().toLocaleString("tr-TR");
-
-    try {
-      const totalLife = Number(selectedRowForRepair["total_life"]) || 1000;
-
-      const updatedData = {
-        ...selectedRowForRepair,
-        adres: buildFullAddress(selectedRowForRepair),
-        operatör: "BOŞTA",
-        durum: "KULLANILABİLİR",
-        tarih: simdi,
-        current_life: totalLife,
-        total_life: totalLife,
-        gecmis: [
-          ...(selectedRowForRepair["gecmis"] || []),
-          {
-            islem: "ONARIM",
-            operator: "SİSTEM",
-            tarih: simdi,
-            aciklama: note,
-          },
-        ],
-      };
-
-      await saveData(updatedData);
-      handleCloseRepairModal();
-      toast.success("Parça kurtarıldı!", { id: toastId });
-    } catch (e: any) {
-      toast.error("Hata: " + e.message, { id: toastId });
-    }
-  };
-
-  const handleBulkUpdate = async (
-    items: any[],
-    location: {
-      raf: string;
-      palet: string;
-      kutu: string;
-    }
-  ) => {
-    if (!items.length) {
-      toast.error("Seçili kayıt yok!");
-      return;
-    }
-  
-    const toastId = toast.loading("Adresler güncelleniyor...");
-  
-    try {
-      const batch = writeBatch(db);
-  
-      const raf = location.raf.trim().toUpperCase();
-      const palet = location.palet.trim().toUpperCase();
-      const kutu = location.kutu.trim().toUpperCase();
-  
-      const adres = `${raf} / ${palet} / ${kutu}`;
-  
-      items.forEach((item) => {
-        const docRef = doc(db, "fixtures", String(item.id));
-  
-        batch.update(docRef, {
-          raf,
-          palet,
-          kutu,
-          adres,
-          durum: "KULLANILABİLİR",
-          operatör: "BOŞTA",
-          tarih: new Date().toLocaleString("tr-TR"),
-        });
-      });
-  
-      await batch.commit();
-  
-      toast.success(`${items.length} parça başarıyla güncellendi!`, {
-        id: toastId,
-      });
-    } catch (e: any) {
-      toast.error("Hata: " + e.message, {
-        id: toastId,
-      });
-    }
-  };
-
-  const handleAuditMarkAsLost = async (missingItems: FixtureData[]) => {
-    const simdi = new Date().toLocaleString("tr-TR");
-
-    const promises = missingItems.map((item: any) =>
-      saveData({
-        ...item,
-        adres: buildFullAddress(item),
-        operatör: "KAYIP",
-        durum: "KAYIP",
-        tarih: simdi,
-        gecmis: [
-          ...(item["gecmis"] || []),
-          {
-            islem: "KAYIP",
-            operator: "SAYIM",
-            tarih: simdi,
-          },
-        ],
-      })
-    );
-
-    try {
-      const toastId = toast.loading("Eksikler kaydediliyor...");
-      await Promise.all(promises);
-      toast.success("İşlem tamamlandı.", { id: toastId });
-    } catch (e) {
-      toast.error("Hata!");
-    }
-  };
-
-  const dashboardFilteredData = useMemo(() => {
-    let result = normalizedData;
-
-    if (dashboardFilter === "ACTIVE") {
-      result = result.filter(
-        (item: any) =>
-          item["operatör"] &&
-          item["operatör"] !== "BOŞTA" &&
-          !["KAYIP", "ARIZALI"].includes(String(item.durum))
-      );
-    } else if (dashboardFilter === "IDLE") {
-      result = result.filter(
-        (item: any) =>
-          (!item["operatör"] || item["operatör"] === "BOŞTA") &&
-          !["KAYIP", "ARIZALI"].includes(String(item.durum))
-      );
-    }
-
-    return result;
-  }, [normalizedData, dashboardFilter]);
-
-  const totalPages = useMemo(() => {
-    if (itemsPerPage === -1) return 1;
-    return Math.ceil(dashboardFilteredData.length / itemsPerPage);
-  }, [dashboardFilteredData, itemsPerPage]);
-
-  const paginatedData = useMemo(() => {
-    if (itemsPerPage === -1) return dashboardFilteredData;
-
-    return dashboardFilteredData.slice(
-      (currentPage - 1) * itemsPerPage,
-      (currentPage - 1) * itemsPerPage + itemsPerPage
-    );
-  }, [dashboardFilteredData, currentPage, itemsPerPage]);
-
-  const handleExportData = async () => {
-    if (normalizedData.length === 0) {
-      return toast.error("İndirilecek veri yok.");
-    }
-
-    const toastId = toast.loading("Excel dosyası hazırlanıyor...");
-
-    try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet("Liste");
-
-      worksheet.addRow(HEADERS.map((h) => h.toLocaleUpperCase("tr-TR")));
-
-      normalizedData.forEach((item: any) => {
-        worksheet.addRow(HEADERS.map((h) => item[h] || ""));
-      });
-
-      const buffer = await workbook.xlsx.writeBuffer();
-
-      saveAs(new Blob([buffer]), "Liste.xlsx");
-
-      toast.success("Excel indirildi.", { id: toastId });
-    } catch (err) {
-      toast.error("Hata oluştu.", { id: toastId });
-    }
-  };
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, activeFilters, dashboardFilter, itemsPerPage]);
+  const paginatedData = useMemo(
+    () =>
+      normalizedData.slice(
+        (currentPage - 1) * itemsPerPage,
+        (currentPage - 1) * itemsPerPage + itemsPerPage
+      ),
+    [normalizedData, currentPage, itemsPerPage]
+  );
 
   if (authLoading) {
     return (
-      <div className="bg-gray-900 min-h-screen flex items-center justify-center font-bold text-teal-500">
-        YÜKLENİYOR...
+      <div className="bg-gray-900 min-h-screen flex items-center justify-center text-teal-500 font-bold italic">
+        ER MAKİNA YÜKLENİYOR...
       </div>
     );
   }
 
-  if (!userRole) {
-    return <Login onLoginSuccess={setUserRole} />;
-  }
+  if (!userRole) return <Login onLoginSuccess={setUserRole} />;
 
   return (
-    <div className="h-screen w-screen overflow-hidden font-sans relative text-gray-200 flex flex-col">
+    <div className="h-screen w-screen overflow-hidden font-sans relative text-gray-200 flex flex-col bg-gray-900">
+      <EnvBadge />
       <Toaster position="top-right" />
-      <div className="fixed inset-0 z-0 bg-gray-900/95" />
 
-      {isOperationLoading && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex flex-col items-center justify-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-teal-500"></div>
+      {isScannerOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center p-4 backdrop-blur-md">
+          <div className="w-full max-w-sm bg-gray-800 rounded-3xl overflow-hidden border-2 border-teal-500 shadow-[0_0_50px_rgba(20,184,166,0.3)]">
+            <div className="p-5 flex justify-between items-center bg-gray-700/50">
+              <span className="font-black tracking-widest text-teal-400">
+                QR OKUYUCU
+              </span>
+
+              <button
+                onClick={() => setIsScannerOpen(false)}
+                className="bg-red-500/20 text-red-500 px-3 py-1 rounded-lg text-xs font-bold"
+              >
+                KAPAT
+              </button>
+            </div>
+
+            <div className="aspect-square relative">
+              <Scanner
+                onScan={(res) => {
+                  if (res) {
+                    const val = Array.isArray(res) ? res[0].rawValue : res;
+                    setSearchQuery(val);
+                    setIsScannerOpen(false);
+                    toast.success("Kod Okundu: " + val);
+                  }
+                }}
+              />
+            </div>
+          </div>
         </div>
       )}
 
-      <header className="relative z-20 flex justify-between items-center border-b border-gray-700/50 p-4 bg-gray-900 shadow-lg flex-shrink-0">
+      {isOperationLoading && (
+        <div className="fixed inset-0 z-[90] bg-black/70 flex items-center justify-center">
+          <div className="text-teal-400 font-bold">İşlem yapılıyor...</div>
+        </div>
+      )}
+
+      <header className="relative z-20 flex justify-between items-center border-b border-gray-800 p-4 bg-gray-900">
         <div className="flex items-center px-4 py-2 rounded-xl bg-white">
           <img src={logoResmi} alt="Logo" className="h-8 w-auto" />
         </div>
 
-        <div className="flex items-center gap-4">
-          <span className="text-xs font-bold text-teal-400 uppercase">
-            {userRole === "admin" ? "Yönetici" : "Misafir"}
+        <div className="flex items-center gap-4 pr-28">
+          <span className="text-xs font-bold text-teal-400 uppercase tracking-widest">
+            {userRole} PANELİ
           </span>
 
           <button
-            onClick={() => handleLogout(false)}
-            className="text-xs font-bold text-red-500 bg-red-900/20 px-3 py-1 rounded-lg border border-red-500/30"
+            onClick={() => {
+              signOut(auth);
+              sessionStorage.clear();
+              window.location.reload();
+            }}
+            className="text-xs font-bold text-red-500 bg-red-500/10 px-4 py-2 rounded-xl border border-red-500/20 uppercase"
           >
             ÇIKIŞ
           </button>
@@ -694,7 +411,7 @@ const App: React.FC = () => {
           onFilterClick={setDashboardFilter}
         />
 
-        <div className="flex flex-col xl:flex-row gap-4 bg-gray-800/90 p-4 rounded-xl border border-gray-700 shadow-lg">
+        <div className="flex flex-col xl:flex-row gap-4 bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 backdrop-blur-sm">
           <div className="flex-1 flex gap-2">
             <SearchBar
               value={searchQuery}
@@ -704,58 +421,50 @@ const App: React.FC = () => {
 
             <button
               onClick={() => setIsScannerOpen(true)}
-              className="bg-teal-600 p-2 rounded-lg"
+              className="bg-teal-600 p-3 rounded-xl hover:bg-teal-500 transition-all shadow-lg shadow-teal-900/20"
             >
               <CameraIcon />
-            </button>
-
-            <button
-              onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
-              className="bg-gray-700 px-4 rounded-lg text-sm"
-            >
-              Filtre
             </button>
           </div>
 
           <div className="flex gap-2">
             {!isGuest && (
               <>
-                <input type="file" ref={fileInputRef} className="hidden" />
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept=".xlsx"
+                  onChange={handleFileUpload}
+                />
 
                 <button
-                  onClick={handleOpenAddModal}
-                  className="bg-teal-600 px-4 py-2 rounded-lg text-sm font-bold"
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="bg-teal-600 px-5 rounded-xl text-xs font-black uppercase"
                 >
                   EKLE
                 </button>
 
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="bg-indigo-600 px-4 py-2 rounded-lg text-sm font-bold"
+                  className="bg-indigo-600 px-5 rounded-xl text-xs font-black uppercase"
                 >
-                  EXCEL
+                  EXCEL YÜKLE
                 </button>
               </>
             )}
 
             <button
               onClick={() => setIsLabelModalOpen(true)}
-              className="bg-purple-700 px-4 py-2 rounded-lg text-sm font-bold"
+              className="bg-purple-700 px-5 rounded-xl text-xs font-black uppercase"
             >
               ETİKET
-            </button>
-
-            <button
-              onClick={handleExportData}
-              className="bg-emerald-700 px-4 py-2 rounded-lg text-sm font-bold"
-            >
-              İNDİR
             </button>
 
             {!isGuest && (
               <button
                 onClick={() => setIsAuditModalOpen(true)}
-                className="bg-gradient-to-r from-teal-600 to-emerald-600 px-6 py-2 rounded-lg text-sm font-black shadow-lg transition-all hover:scale-105"
+                className="bg-gradient-to-br from-orange-500 to-red-600 px-6 rounded-xl text-xs font-black uppercase shadow-lg"
               >
                 SAYIM
               </button>
@@ -763,22 +472,7 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {isFilterPanelOpen && (
-          <AdvancedFilters
-            data={normalizedRawData}
-            filters={activeFilters}
-            onFilterChange={(k, v) =>
-              setActiveFilters((prev: any) => ({
-                ...prev,
-                [k]: v,
-              }))
-            }
-            onClearFilters={() => setActiveFilters({})}
-            filterableColumns={FILTER_COLUMNS}
-          />
-        )}
-
-        <div className="flex-1 overflow-hidden flex flex-col rounded-xl border border-gray-700 bg-gray-900/60 shadow-2xl">
+        <div className="flex-1 overflow-hidden flex flex-col rounded-2xl border border-gray-800 bg-gray-900/40 backdrop-blur-md">
           <DataTable
             headers={HEADERS}
             data={paginatedData}
@@ -793,15 +487,27 @@ const App: React.FC = () => {
                   : { key, direction: "ascending" }
               )
             }
-            onEdit={handleOpenEditModal}
-            onDelete={onDeleteHandler}
-            onCancel={handleOpenCancelModal}
-            onRepair={handleOpenRepairModal}
-            onAssignOperatorClick={handleOpenOperatorModal}
-            onGenerateDeliveryForm={handleOpenDeliveryForm}
-            onPrintLabel={handleOpenLabelModal}
-            onViewImage={handleViewImage}
-            onViewHistory={handleOpenHistoryModal}
+            onEdit={(row) => {
+              setEditingRow(row);
+              setIsAddModalOpen(true);
+            }}
+            onDelete={(id) => deleteData(id)}
+            onViewImage={setSelectedImageUrl}
+            onViewHistory={(row) => {
+              setSelectedRowForHistory(row);
+              setIsHistoryModalOpen(true);
+            }}
+            onAssignOperatorClick={(row) => {
+              setSelectedRowForOperator(row);
+              setIsOperatorModalOpen(true);
+            }}
+            onCancel={() => {}}
+            onRepair={() => {}}
+            onGenerateDeliveryForm={() => {}}
+            onPrintLabel={(row) => {
+              setSelectedLabelSerial(row["seri no"]);
+              setIsLabelModalOpen(true);
+            }}
             readOnly={isGuest}
             primaryKey="seri no"
             displayKey="seri no"
@@ -810,58 +516,39 @@ const App: React.FC = () => {
 
         <Pagination
           currentPage={currentPage}
-          totalPages={totalPages}
+          totalPages={Math.ceil(normalizedData.length / itemsPerPage)}
           onPageChange={setCurrentPage}
           itemsPerPage={itemsPerPage}
           onItemsPerPageChange={setItemsPerPage}
-          totalItems={dashboardFilteredData.length}
+          totalItems={normalizedData.length}
         />
       </main>
+
+      <AddDataModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSave={async (row: any, img?: File | null) => {
+          await saveData(row, img);
+          setIsAddModalOpen(false);
+        }}
+        initialData={editingRow}
+        operators={[]}
+        headers={HEADERS}
+      />
 
       <AuditModal
         isOpen={isAuditModalOpen}
         onClose={() => setIsAuditModalOpen(false)}
         data={normalizedRawData}
-        onMarkAsLost={handleAuditMarkAsLost}
+        onMarkAsLost={async () => {}}
         onBulkUpdate={handleBulkUpdate}
       />
 
-      <RepairModal
-        isOpen={isRepairModalOpen}
-        onClose={handleCloseRepairModal}
-        onConfirm={onRepairConfirmHandler}
-        fixtureName={selectedRowForRepair?.["parça adı"]}
-      />
-
-      <CancellationModal
-        isOpen={isCancelModalOpen}
-        onClose={handleCloseCancelModal}
-        onConfirm={onCancelConfirmHandler}
-        fixtureName={selectedRowForCancel?.["parça adı"]}
-      />
-
-      <AddDataModal
-        isOpen={isAddModalOpen}
-        onClose={handleCloseModal}
-        onSave={onSaveHandler}
-        initialData={editingRow}
-        operators={OPERATORS_LIST}
-        headers={HEADERS}
-      />
-
-      <OperatorSelectionModal
-        isOpen={isOperatorModalOpen}
-        onClose={handleCloseOperatorModal}
-        onSelect={onOperatorAssignHandler}
-        operators={OPERATORS_LIST}
-        currentOperator={selectedRowForOperator?.["operatör"]}
-        fixtureName={selectedRowForOperator?.["parça adı"]}
-      />
-
-      <DeliveryFormModal
-        isOpen={isDeliveryFormModalOpen}
-        onClose={handleCloseDeliveryForm}
-        rowData={selectedRowForDeliveryForm}
+      <HistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+        fixtureName={selectedRowForHistory?.["parça adı"]}
+        historyData={selectedRowForHistory?.["gecmis"] || []}
       />
 
       <LabelPrintingModal
@@ -876,11 +563,13 @@ const App: React.FC = () => {
         onClose={() => setSelectedImageUrl(null)}
       />
 
-      <HistoryModal
-        isOpen={isHistoryModalOpen}
-        onClose={handleCloseHistoryModal}
-        fixtureName={selectedRowForHistory?.["parça adı"]}
-        historyData={selectedRowForHistory?.["gecmis"] || []}
+      <OperatorSelectionModal
+        isOpen={isOperatorModalOpen}
+        onClose={() => setIsOperatorModalOpen(false)}
+        onSelect={() => {}}
+        operators={[]}
+        currentOperator={selectedRowForOperator?.["operatör"]}
+        fixtureName={selectedRowForOperator?.["parça adı"]}
       />
     </div>
   );

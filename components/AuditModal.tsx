@@ -19,38 +19,48 @@ const AuditModal: React.FC<AuditModalProps> = ({
   data,
   onBulkUpdate,
 }) => {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [searchRack, setSearchRack] = useState('');
-  const [targetRaf, setTargetRaf] = useState('');
-  const [targetPalet, setTargetPalet] = useState('');
-  const [targetKutu, setTargetKutu] = useState('Kutu 1');
+  const [step, setStep] = useState<1 | 2>(1);
+  const [searchRack, setSearchRack] = useState("");
+  const [targetRaf, setTargetRaf] = useState("");
+  const [targetPalet, setTargetPalet] = useState("");
+  const [targetKutu, setTargetKutu] = useState("Kutu 1");
   const [expectedItems, setExpectedItems] = useState<FixtureData[]>([]);
   const [foundIds, setFoundIds] = useState<Set<string>>(new Set());
 
   const normalize = (value: unknown): string => {
-    return String(value || '')
-      .toLocaleUpperCase('tr-TR')
-      .replace(/\s+/g, '')
-      .replace(/-/g, '')
-      .replace(/\//g, '')
-      .replace(/KUTU0?(\d+)/g, 'KUTU$1')
-      .replace(/P0*(\d+)/g, 'P$1')
-      .replace(/[^A-Z0-9]/g, '');
+    return String(value || "")
+      .toLocaleUpperCase("tr-TR")
+      .replace(/\s+/g, "")
+      .replace(/-/g, "")
+      .replace(/\//g, "")
+      .replace(/KUTU0?(\d+)/g, "KUTU$1")
+      .replace(/P0*(\d+)/g, "P$1")
+      .replace(/[^A-Z0-9]/g, "");
   };
 
   const formatForDisplay = (value: unknown): string =>
-    String(value || '').toLocaleUpperCase('tr-TR').trim();
+    String(value || "")
+      .toLocaleUpperCase("tr-TR")
+      .trim();
+
+  const getItemAddress = (item: FixtureData): string => {
+    const adres = formatForDisplay(item.adres);
+    const raf = formatForDisplay(item.raf);
+    const palet = formatForDisplay(item.palet);
+    const kutu = formatForDisplay(item.kutu);
+
+    if (raf || palet || kutu) {
+      return [raf, palet, kutu].filter(Boolean).join(" / ");
+    }
+
+    if (adres) return adres;
+
+    return "-";
+  };
 
   const buildSearchAddress = (item: FixtureData): string => {
     return normalize(
-      [
-        item.raf,
-        item.palet,
-        item.kutu,
-        item.adres,
-      ]
-        .filter(Boolean)
-        .join(' ')
+      [item.raf, item.palet, item.kutu, item.adres].filter(Boolean).join(" ")
     );
   };
 
@@ -59,11 +69,11 @@ const AuditModal: React.FC<AuditModalProps> = ({
     const displaySearch = formatForDisplay(searchRack);
 
     if (!cleanSearch) {
-      return toast.error('Lütfen bir raf numarası girin.');
+      return toast.error("Lütfen mevcut adres girin.");
     }
 
     if (!Array.isArray(data) || data.length === 0) {
-      return toast.error('Aranacak veri bulunamadı.');
+      return toast.error("Aranacak veri bulunamadı.");
     }
 
     const searchParts = formatForDisplay(searchRack)
@@ -78,12 +88,10 @@ const AuditModal: React.FC<AuditModalProps> = ({
       const itemAdres = normalize(item.adres);
       const fullAddress = buildSearchAddress(item);
 
-      // Örn: A3/P-002/KUTU1 yazılırsa bütün parçaların adreste geçmesini bekler
       if (searchParts.length >= 2) {
         return searchParts.every((part) => fullAddress.includes(part));
       }
 
-      // Tek arama: A3, P001, KUTU1 gibi
       return (
         itemRaf === cleanSearch ||
         itemPalet === cleanSearch ||
@@ -95,7 +103,9 @@ const AuditModal: React.FC<AuditModalProps> = ({
     });
 
     if (filtered.length === 0) {
-      return toast.error(`"${displaySearch}" ile eşleşen bir konum bulunamadı.`);
+      return toast.error(
+        `"${displaySearch}" ile eşleşen bir konum bulunamadı.`
+      );
     }
 
     setExpectedItems(filtered);
@@ -104,26 +114,34 @@ const AuditModal: React.FC<AuditModalProps> = ({
   };
 
   const handleFinish = async () => {
+    const selectedItems = expectedItems.filter((i) =>
+      foundIds.has(String(i.id))
+    );
+
+    if (selectedItems.length === 0) {
+      return toast.error("Lütfen taşınacak en az bir parça seçin.");
+    }
+
+    if (!targetRaf.trim()) {
+      return toast.error("Hedef raf girin.");
+    }
+
+    if (!targetPalet.trim()) {
+      return toast.error("Hedef palet girin.");
+    }
+
     try {
-      const selectedItems = expectedItems.filter((i) =>
-        foundIds.has(String(i.id))
-      );
-
-      if (selectedItems.length === 0) {
-        return toast.error('Lütfen taşınacak en az bir parça seçin.');
-      }
-
       await onBulkUpdate(selectedItems, {
         raf: formatForDisplay(targetRaf),
-        palet: formatForDisplay(targetPalet || '-'),
-        kutu: formatForDisplay(targetKutu || 'Kutu 1'),
+        palet: formatForDisplay(targetPalet || "-"),
+        kutu: formatForDisplay(targetKutu || "Kutu 1"),
       });
 
       handleClose();
-      toast.success('Seçilen parçalar yeni adrese aktarıldı.');
+      toast.success("Seçilen parçalar yeni adrese aktarıldı.");
     } catch (error) {
-      console.error('Adres güncelleme hatası:', error);
-      toast.error('İşlem sırasında bir hata oluştu.');
+      console.error("Adres güncelleme hatası:", error);
+      toast.error("İşlem sırasında bir hata oluştu.");
     }
   };
 
@@ -177,7 +195,7 @@ const AuditModal: React.FC<AuditModalProps> = ({
                 </label>
                 <input
                   type="text"
-                  placeholder="Örn: A3 / P-001 / Kutu 1"
+                  placeholder="Örn: A1 veya A1 / P-001 / Kutu 1"
                   value={searchRack}
                   onChange={(e) => setSearchRack(e.target.value)}
                   className="w-full p-4 bg-[#111827] border border-gray-700 rounded-2xl text-white outline-none focus:border-teal-500 transition-all uppercase"
@@ -258,15 +276,15 @@ const AuditModal: React.FC<AuditModalProps> = ({
                     onClick={() => toggleFoundItem(item.id)}
                     className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center gap-4 ${
                       isSelected
-                        ? 'bg-teal-900/30 border-teal-500 ring-1 ring-teal-500'
-                        : 'bg-gray-800 border-gray-700 hover:border-gray-500'
+                        ? "bg-teal-900/30 border-teal-500 ring-1 ring-teal-500"
+                        : "bg-gray-800 border-gray-700 hover:border-gray-500"
                     }`}
                   >
                     <div
                       className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
                         isSelected
-                          ? 'bg-teal-500 border-teal-500'
-                          : 'border-gray-500'
+                          ? "bg-teal-500 border-teal-500"
+                          : "border-gray-500"
                       }`}
                     >
                       {isSelected && (
@@ -288,17 +306,15 @@ const AuditModal: React.FC<AuditModalProps> = ({
 
                     <div className="overflow-hidden">
                       <p className="text-white text-sm font-bold truncate">
-                        {item['seri no']}
+                        {item["seri no"]}
                       </p>
 
                       <p className="text-gray-400 text-[11px] truncate">
-                        {item['parça adı']}
+                        {item["parça adı"]}
                       </p>
 
-                      <p className="text-gray-500 text-[10px] truncate mt-1">
-                        {formatForDisplay(item.raf)} /{' '}
-                        {formatForDisplay(item.palet || '-')} /{' '}
-                        {formatForDisplay(item.kutu || '-')}
+                      <p className="text-teal-400 text-[11px] truncate mt-1 font-bold">
+                        {getItemAddress(item)}
                       </p>
                     </div>
                   </div>

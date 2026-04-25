@@ -43,10 +43,14 @@ const splitParts = (value: unknown): string[] => {
     .filter(Boolean);
 };
 
+
 const buildFullAddress = (item: any): string => {
+  if (item?.adres && String(item.adres).trim() !== "") {
+    return cleanText(item.adres);
+  }
+
   const parts = [
     ...splitParts(item?.raf),
-    ...splitParts(item?.konum),
     ...splitParts(item?.palet),
     ...splitParts(item?.kutu),
   ];
@@ -54,12 +58,12 @@ const buildFullAddress = (item: any): string => {
   const unique: string[] = [];
 
   parts.forEach((p) => {
-    if (!unique.includes(p)) {
+    if (p && !unique.includes(p)) {
       unique.push(p);
     }
   });
 
-  return unique.join(' / ');
+  return unique.join(" / ");
 };
 
 const normalizeSearchText = (value: unknown): string => {

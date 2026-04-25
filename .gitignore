@@ -23,4 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 servis-hesabi.json
+services/servis-hesabi.js
+.env
+.env.local
+.env.production
+servis-hesabi.json
 services/servis-hesabi.json
