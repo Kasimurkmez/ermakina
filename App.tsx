@@ -318,7 +318,19 @@ const App: React.FC = () => {
 
     return () => unsubscribe();
   }, []);
+  const sortedData = useMemo(() => {
+    if (!normalizedData) return [];
 
+    return [...normalizedData].sort((a: any, b: any) => {
+      const getNumber = (val: string) =>
+        Number(String(val || "").replace(/[^\d]/g, ""));
+
+      const numA = getNumber(a["seri no"]);
+      const numB = getNumber(b["seri no"]);
+
+      return numA - numB;
+    });
+  }, [normalizedData]);
   const paginatedData = useMemo(
     () =>
       normalizedData.slice(
